@@ -24,13 +24,13 @@
     <div class="bg-zinc-900 rounded-3xl p-6 mb-8">
       <div class="text-center">
         <div id="date" class="text-zinc-400 text-sm mb-1"></div>
-        <div id="grade" class="text-7xl font-black mb-1">A</div>
-        <div id="score-detail" class="text-zinc-400 text-sm">18/24 • 75%</div>
+        <div id="grade" class="text-7xl font-black mb-1">F</div>
+        <div id="score-detail" class="text-zinc-400 text-sm">0/24 • 0%</div>
       </div>
 
-      <!-- Strength Training Toggle (exactly as you asked) -->
+      <!-- Gymmaxxed? Toggle -->
       <div class="mt-6 flex items-center justify-center gap-4 bg-zinc-800 rounded-2xl p-4">
-        <span class="text-sm font-medium">Strength Training Today?</span>
+        <span class="text-sm font-medium">Gymmaxxed?</span>
         <label class="relative inline-flex items-center cursor-pointer">
           <input type="checkbox" id="strength-toggle" class="sr-only peer">
           <div class="w-14 h-7 bg-zinc-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500"></div>
@@ -43,7 +43,7 @@
       </div>
     </div>
 
-    <!-- HABITS (now only 16 daily ones) -->
+    <!-- HABITS LIST (NOW RESTORED) -->
     <div id="habits-list" class="space-y-8"></div>
 
     <!-- NOTES -->
@@ -57,6 +57,7 @@
       VIEW HISTORY (last 14 days)
     </button>
 
+    <!-- HISTORY MODAL -->
     <div id="history-modal" class="hidden fixed inset-0 bg-black/80 flex items-end">
       <div class="bg-zinc-900 w-full max-h-[80vh] overflow-auto rounded-t-3xl p-6">
         <div class="flex justify-between items-center mb-6">
@@ -120,6 +121,43 @@
       return score;
     }
 
+    function renderHabits() {
+      const container = document.getElementById('habits-list');
+      container.innerHTML = '';
+
+      const grouped = {};
+      habits.forEach(h => {
+        if (!grouped[h.category]) grouped[h.category] = [];
+        grouped[h.category].push(h);
+      });
+
+      Object.keys(grouped).forEach(cat => {
+        const section = document.createElement('div');
+        section.innerHTML = `<h3 class="text-emerald-400 font-medium mb-3 text-sm tracking-widest">${cat.toUpperCase()}</h3><div class="space-y-1"></div>`;
+        const habitDiv = section.querySelector('div');
+
+        grouped[cat].forEach(h => {
+          const checked = data[today] && data[today].habits && data[today].habits[h.id] ? true : false;
+          const div = document.createElement('div');
+          div.className = 'habit-item flex items-center gap-3 bg-zinc-900 px-5 py-4 rounded-2xl';
+          div.innerHTML = `
+            <input type="checkbox" id="h${h.id}" ${checked ? 'checked' : ''} class="w-5 h-5 accent-emerald-400">
+            <label for="h${h.id}" class="flex-1 text-[15px] cursor-pointer">${h.text}</label>
+            <span class="text-xs bg-zinc-800 px-2.5 py-1 rounded-xl text-zinc-400">${h.points}</span>
+          `;
+          habitDiv.appendChild(div);
+
+          div.querySelector('input').addEventListener('change', (e) => {
+            if (!data[today]) data[today] = { habits: {}, notes: '', strength: false };
+            data[today].habits[h.id] = e.target.checked;
+            saveData();
+            updateScore();
+          });
+        });
+        container.appendChild(section);
+      });
+    }
+
     function updateScore() {
       const dayData = data[today] || {};
       const score = calculateScore(dayData);
@@ -133,15 +171,68 @@
       updateStreak();
     }
 
-    // (Rest of the code is the same clean logic as before – renderHabits, history, notes, streak, saveData, etc.)
-    // Full working version is included below the line – just copy the whole thing
+    function updateStreak() {
+      let streak = 0;
+      let date = new Date(today);
+      while (true) {
+        const dateStr = date.toISOString().split('T')[0];
+        const dayData = data[dateStr];
+        if (dayData && calculateScore(dayData) >= 16) {
+          streak++;
+          date.setDate(date.getDate() - 1);
+        } else break;
+      }
+      document.getElementById('streak-count').textContent = streak;
+    }
 
-    function renderHabits() { /* same as previous version but with new habits array */ }
-    function updateStreak() { /* counts B or better */ }
-    function renderHistory() { /* now shows letter grades */ }
-    function toggleHistory() { /* same */ }
-    function saveData() { localStorage.setItem('chudxData', JSON.stringify(data)); }
-    function loadNotes() { /* same */ }
+    function renderHistory() {
+      const list = document.getElementById('history-list');
+      list.innerHTML = '';
+      const sortedDates = Object.keys(data).sort().reverse().slice(0, 14);
+
+      sortedDates.forEach(dateStr => {
+        const dayData = data[dateStr];
+        const score = calculateScore(dayData);
+        const gradeInfo = getLetterGrade(score);
+
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between bg-zinc-800 px-5 py-4 rounded-2xl';
+        div.innerHTML = `
+          <div>
+            <div class="font-medium">${new Date(dateStr).toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'})}</div>
+            <div class="text-xs text-zinc-400">${score} pts</div>
+          </div>
+          <div class="text-right">
+            <div class="${gradeInfo.color} font-bold text-3xl">${gradeInfo.grade}</div>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+
+      if (sortedDates.length === 0) {
+        list.innerHTML = `<p class="text-zinc-400 text-center py-8">No history yet — start tracking today!</p>`;
+      }
+    }
+
+    function toggleHistory() {
+      const modal = document.getElementById('history-modal');
+      modal.classList.toggle('hidden');
+      if (!modal.classList.contains('hidden')) renderHistory();
+    }
+
+    function saveData() {
+      localStorage.setItem('chudxData', JSON.stringify(data));
+    }
+
+    function loadNotes() {
+      const notesEl = document.getElementById('notes');
+      if (data[today] && data[today].notes) notesEl.value = data[today].notes;
+      notesEl.addEventListener('input', () => {
+        if (!data[today]) data[today] = { habits: {}, notes: '', strength: false };
+        data[today].notes = notesEl.value;
+        saveData();
+      });
+    }
 
     function init() {
       document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -151,7 +242,7 @@
       updateScore();
       loadNotes();
 
-      // Strength toggle listener
+      // Gymmaxxed? toggle
       const strengthToggle = document.getElementById('strength-toggle');
       strengthToggle.checked = data[today].strength || false;
       strengthToggle.addEventListener('change', () => {
@@ -160,9 +251,6 @@
         updateScore();
       });
     }
-
-    // Full renderHabits, history, streak functions are identical to the previous version (just with new habits and data key 'chudxData')
-    // (To keep this message clean I shortened them, but the full working file is ready – reply "full code" if you want me to paste the 200-line complete version with every function expanded)
 
     init();
   </script>
