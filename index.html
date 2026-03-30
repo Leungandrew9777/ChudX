@@ -25,7 +25,20 @@
     }
     .page { display: none; }
     .page.active { display: block; }
-    .nav-item { transition: all 0.2s; }
+
+    /* IMPROVED BOTTOM NAV */
+    .bottom-nav {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .nav-item {
+      transition: all 0.2s;
+    }
+    .nav-item.active-nav {
+      color: #10b981;
+    }
+    .nav-item.active-nav span:first-child {
+      transform: scale(1.1);
+    }
   </style>
 </head>
 <body class="bg-zinc-950 text-white min-h-screen pb-20">
@@ -107,24 +120,26 @@
     </div>
   </div>
 
-  <!-- BOTTOM NAV -->
-  <div class="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 max-w-md mx-auto">
-    <div class="flex text-xs font-medium">
-      <button onclick="switchPage(0)" class="nav-item flex-1 py-4 flex flex-col items-center text-emerald-400 active-nav">
-        🏠<br>Daily
+  <!-- IMPROVED BOTTOM NAV -->
+  <div class="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-700 max-w-md mx-auto bottom-nav">
+    <div class="flex justify-around items-center px-4 py-2">
+      <button onclick="switchPage(0)" class="nav-item flex-1 flex flex-col items-center active-nav">
+        <span class="text-3xl mb-1">🏠</span>
+        <span class="text-xs font-medium">Daily</span>
       </button>
-      <button onclick="switchPage(1)" class="nav-item flex-1 py-4 flex flex-col items-center">
-        📅<br>Calendar
+      <button onclick="switchPage(1)" class="nav-item flex-1 flex flex-col items-center">
+        <span class="text-3xl mb-1">📅</span>
+        <span class="text-xs font-medium">Calendar</span>
       </button>
-      <button onclick="switchPage(2)" class="nav-item flex-1 py-4 flex flex-col items-center">
-        📊<br>Stats
+      <button onclick="switchPage(2)" class="nav-item flex-1 flex flex-col items-center">
+        <span class="text-3xl mb-1">📊</span>
+        <span class="text-xs font-medium">Stats</span>
       </button>
     </div>
   </div>
 
   <script>
-    // === YOUR HABITS & LOGIC (same as last working version) ===
-    const habits = [
+    const habits = [ /* same 15 habits as before */ 
       { id: 1, category: "Morning", text: "Sleepmaxxing (8+ hours consistent)", points: 3 },
       { id: 2, category: "Morning", text: "Sunmaxxing (10–15 min sunlight)", points: 2 },
       { id: 3, category: "Morning", text: "Watermaxxing (3–4L)", points: 2 },
@@ -146,24 +161,173 @@
     const today = new Date().toISOString().split('T')[0];
     const MAX_POINTS = 35;
 
-    // ... (all the same functions from before: getLetterGrade, calculateScore, renderHabits, updateScore, updateStreak, renderCalendar, etc.)
-    // (I kept them exactly the same so you don’t lose anything)
+    function getLetterGrade(points) { /* unchanged from previous version */ 
+      const percent = (points / MAX_POINTS) * 100;
+      if (percent >= 95) return { grade: 'S', color: 'text-yellow-400', bg: '#FACC15' };
+      if (percent >= 90) return { grade: 'A+', color: 'text-emerald-400', bg: '#10B981' };
+      if (percent >= 85) return { grade: 'A', color: 'text-emerald-400', bg: '#34D399' };
+      if (percent >= 80) return { grade: 'A-', color: 'text-emerald-400', bg: '#6EE7B7' };
+      if (percent >= 75) return { grade: 'B+', color: 'text-cyan-400', bg: '#22D3EE' };
+      if (percent >= 70) return { grade: 'B', color: 'text-cyan-400', bg: '#67E8F9' };
+      if (percent >= 65) return { grade: 'B-', color: 'text-cyan-400', bg: '#A5F3FC' };
+      if (percent >= 55) return { grade: 'C', color: 'text-blue-400', bg: '#60A5FA' };
+      if (percent >= 45) return { grade: 'D', color: 'text-orange-400', bg: '#FB923C' };
+      return { grade: 'F', color: 'text-red-500', bg: '#EF4444' };
+    }
 
-    function getLetterGrade(points) { /* same as before */ }
-    function calculateScore(dayData) { /* same */ }
-    function renderHabits() { /* same */ }
-    function updateScore() { /* same */ }
-    function updateStreak() { /* same */ }
-    function renderCalendar() { /* same */ }
+    function calculateScore(dayData) { /* unchanged */ 
+      if (!dayData) return 0;
+      let score = 0;
+      if (dayData.habits) {
+        Object.keys(dayData.habits).forEach(id => {
+          if (dayData.habits[id]) {
+            const habit = habits.find(h => h.id === parseInt(id));
+            if (habit) score += habit.points;
+          }
+        });
+      }
+      if (dayData.strength) score += 3;
+      return score;
+    }
 
-    // NEW: Page switching
+    function renderHabits() { /* unchanged */ 
+      const container = document.getElementById('habits-list');
+      container.innerHTML = '';
+      const grouped = {};
+      habits.forEach(h => {
+        if (!grouped[h.category]) grouped[h.category] = [];
+        grouped[h.category].push(h);
+      });
+      Object.keys(grouped).forEach(cat => {
+        const section = document.createElement('div');
+        section.innerHTML = `<h3 class="text-emerald-400 font-medium mb-3 text-sm tracking-widest">${cat.toUpperCase()}</h3><div class="space-y-1"></div>`;
+        const habitDiv = section.querySelector('div');
+        grouped[cat].forEach(h => {
+          const checked = data[today] && data[today].habits && data[today].habits[h.id] ? true : false;
+          const div = document.createElement('div');
+          div.className = 'habit-item flex items-center gap-3 bg-zinc-900 px-5 py-4 rounded-2xl';
+          div.innerHTML = `
+            <input type="checkbox" id="h${h.id}" ${checked ? 'checked' : ''} class="w-5 h-5 accent-emerald-400">
+            <label for="h${h.id}" class="flex-1 text-[15px] cursor-pointer">${h.text}</label>
+          `;
+          habitDiv.appendChild(div);
+          div.querySelector('input').addEventListener('change', (e) => {
+            if (!data[today]) data[today] = { habits: {}, notes: '', strength: false };
+            data[today].habits[h.id] = e.target.checked;
+            saveData();
+            updateScore();
+          });
+        });
+        container.appendChild(section);
+      });
+    }
+
+    function updateScore() { /* unchanged */ 
+      const dayData = data[today] || {};
+      const score = calculateScore(dayData);
+      const gradeInfo = getLetterGrade(score);
+      document.getElementById('grade').textContent = gradeInfo.grade;
+      document.getElementById('grade').className = `text-7xl font-black mb-1 ${gradeInfo.color}`;
+      document.getElementById('score-detail').textContent = `${score}/${MAX_POINTS} • ${Math.round((score/MAX_POINTS)*100)}%`;
+      document.getElementById('progress').style.width = `${(score/MAX_POINTS)*100}%`;
+      updateStreak();
+    }
+
+    function updateStreak() { /* unchanged */ 
+      let streak = 0;
+      let date = new Date(today);
+      while (true) {
+        const dateStr = date.toISOString().split('T')[0];
+        const dayData = data[dateStr];
+        if (dayData && calculateScore(dayData) >= 24) {
+          streak++;
+          date.setDate(date.getDate() - 1);
+        } else break;
+      }
+      document.getElementById('streak-count').textContent = streak;
+    }
+
+    function renderCalendar() { /* unchanged */ 
+      const grid = document.getElementById('calendar-grid');
+      grid.innerHTML = '';
+      const currentDate = new Date();
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      document.getElementById('calendar-month').textContent = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const dayData = data[dateStr];
+        const score = dayData ? calculateScore(dayData) : 0;
+        const gradeInfo = score > 0 ? getLetterGrade(score) : null;
+        const dayEl = document.createElement('div');
+        dayEl.className = `calendar-day text-zinc-300 ${score > 0 ? 'has-data' : ''}`;
+        if (score > 0) dayEl.style.backgroundColor = gradeInfo.bg;
+        dayEl.textContent = day;
+        grid.appendChild(dayEl);
+      }
+    }
+
+    function renderStats() { /* unchanged */ 
+      const streakEl = document.getElementById('stats-streak');
+      streakEl.textContent = document.getElementById('streak-count').textContent + ' days 🔥';
+      const recent = Object.keys(data).sort().reverse().slice(0,7);
+      const container = document.getElementById('stats-recent');
+      container.innerHTML = recent.map(date => {
+        const score = calculateScore(data[date]);
+        const grade = getLetterGrade(score);
+        return `<div class="flex justify-between bg-zinc-800 px-4 py-3 rounded-2xl"><span>${date}</span><span class="${grade.color} font-bold">${grade.grade} (${score})</span></div>`;
+      }).join('');
+    }
+
     function switchPage(pageIndex) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById(['page-daily','page-calendar','page-stats'][pageIndex]).classList.add('active');
       
-      // Highlight active nav
-      document.querySelectorAll('.nav-item').forEach((btn,i) => {
-        btn.classList.toggle('text-emerald-400', i === pageIndex);
+      document.querySelectorAll('.nav-item').forEach((btn, i) => {
+        btn.classList.toggle('active-nav', i === pageIndex);
       });
 
-      // Refresh data when switching to
+      if (pageIndex === 1) renderCalendar();
+      if (pageIndex === 2) renderStats();
+    }
+
+    function saveData() {
+      localStorage.setItem('chudxData', JSON.stringify(data));
+    }
+
+    function loadDailyListeners() {
+      const notesEl = document.getElementById('notes');
+      if (data[today] && data[today].notes) notesEl.value = data[today].notes;
+      notesEl.addEventListener('input', () => {
+        if (!data[today]) data[today] = { habits: {}, notes: '', strength: false };
+        data[today].notes = notesEl.value;
+        saveData();
+      });
+
+      const strengthToggle = document.getElementById('strength-toggle');
+      strengthToggle.checked = data[today]?.strength || false;
+      strengthToggle.addEventListener('change', () => {
+        if (!data[today]) data[today] = { habits: {}, notes: '', strength: false };
+        data[today].strength = strengthToggle.checked;
+        saveData();
+        updateScore();
+      });
+    }
+
+    function init() {
+      document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      if (!data[today]) data[today] = { habits: {}, notes: '', strength: false };
+
+      renderHabits();
+      updateScore();
+      loadDailyListeners();
+      switchPage(0);
+    }
+
+    init();
+  </script>
+</body>
+</html>
