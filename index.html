@@ -46,7 +46,7 @@
             <div class="w-14 h-7 bg-zinc-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500"></div>
           </label>
         </div>
-        <div id="volume-input" class="hidden mt-2">
+        <div id="volume-input" class="hidden">
           <label class="text-xs text-zinc-400 mb-1 block">Volume today (kg lifted)</label>
           <input type="number" id="gym-volume" placeholder="0" class="w-full bg-zinc-900 text-white px-4 py-3 rounded-2xl text-lg font-mono">
         </div>
@@ -147,12 +147,11 @@
     ];
 
     const quantHabits = [
-      { id: 9, text: "Sleepmaxxing", unit: "hours", max: 12, points: 3 },
-      { id: 10, text: "Sunmaxxing", unit: "min", max: 30, points: 2 },
-      { id: 11, text: "10k Stepmaxx", unit: "steps", max: 15000, points: 2 },
-      { id: 12, text: "Proteinmaxxing", unit: "g", max: 250, points: 3 },
-      { id: 13, text: "5g Creatine", unit: "yes", max: 1, points: 2 },
-      { id: 14, text: "No slop", unit: "clean meals", max: 5, points: 2 }
+      { id: 9, text: "Sleepmaxxing", unit: "hours", max: 8, points: 3 },
+      { id: 10, text: "10k Stepmaxx", unit: "steps", max: 10000, points: 2 },
+      { id: 11, text: "Proteinmaxxing", unit: "g", max: 200, points: 3 },
+      { id: 12, text: "5g Creatine", unit: "yes", max: 1, points: 2 },
+      { id: 13, text: "No slop", unit: "clean meals", max: 3, points: 2 }
     ];
 
     let data = JSON.parse(localStorage.getItem('chudxData')) || {};
@@ -177,8 +176,10 @@
       if (!dayData) return 0;
       let score = 0;
 
+      // Binary
       binaryHabits.forEach(h => { if (dayData.binary && dayData.binary[h.id]) score += h.points; });
 
+      // Quantitative (proportional)
       quantHabits.forEach(h => {
         if (dayData.quant && dayData.quant[h.id] !== undefined) {
           const value = parseFloat(dayData.quant[h.id]) || 0;
@@ -186,12 +187,11 @@
         }
       });
 
-      // Gym volume formula
+      // Gym volume
       if (dayData.gym) {
         const volume = dayData.gymVolume || 0;
         const TARGET_KG = 10000;
-        const gymPoints = Math.min(3, 3 * (volume / TARGET_KG));
-        score += Math.round(gymPoints);
+        score += Math.round(Math.min(3, 3 * (volume / TARGET_KG)));
       }
 
       return score;
