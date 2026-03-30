@@ -39,10 +39,10 @@
       <div class="text-center">
         <div id="date" class="text-zinc-400 text-sm mb-1"></div>
         <div id="grade" class="text-7xl font-black mb-1">F</div>
-        <div id="score-detail" class="text-zinc-400 text-sm">0/27 • 0%</div>
+        <div id="score-detail" class="text-zinc-400 text-sm">0/35 • 0%</div>
       </div>
 
-      <!-- Gymmaxxed? Toggle -->
+      <!-- Gymmaxxed? Toggle (now worth 3 pts for bodybuilding focus) -->
       <div class="mt-6 flex items-center justify-center gap-4 bg-zinc-800 rounded-2xl p-4">
         <span class="text-sm font-medium">Gymmaxxed?</span>
         <label class="relative inline-flex items-center cursor-pointer">
@@ -57,7 +57,7 @@
       </div>
     </div>
 
-    <!-- HABITS (brainrot + hidden points) -->
+    <!-- HABITS LIST -->
     <div id="habits-list" class="space-y-8"></div>
 
     <!-- NOTES -->
@@ -71,7 +71,7 @@
       VIEW CALENDAR
     </button>
 
-    <!-- HISTORY MODAL (now a full color-gradient calendar) -->
+    <!-- HISTORY MODAL (color-gradient calendar) -->
     <div id="history-modal" class="hidden fixed inset-0 bg-black/80 flex items-end">
       <div class="bg-zinc-900 w-full max-h-[85vh] overflow-auto rounded-t-3xl p-6">
         <div class="flex justify-between items-center mb-6">
@@ -96,28 +96,26 @@
 
   <script>
     const habits = [
-      { id: 1, category: "Morning", text: "Sleepmaxxing (8+ hours consistent)", points: 2 },
-      { id: 2, category: "Morning", text: "Sunmaxxing (10–15 min sunlight)", points: 1 },
+      { id: 1, category: "Morning", text: "Sleepmaxxing (8+ hours consistent)", points: 3 },
+      { id: 2, category: "Morning", text: "Sunmaxxing (10–15 min sunlight)", points: 2 },
       { id: 3, category: "Morning", text: "Watermaxxing (3–4L)", points: 2 },
       { id: 4, category: "Morning", text: "AM Skincaremog", points: 2 },
       { id: 5, category: "Fitness", text: "10k Stepmaxx", points: 2 },
-      { id: 6, category: "Fitness", text: "Posturemaxxing", points: 1 },
-      { id: 7, category: "Fitness", text: "Cold Showermaxx", points: 1 },
-      { id: 8, category: "Nutrition", text: "Proteinmaxxing", points: 2 },
-      { id: 9, category: "Nutrition", text: "5g Creatine", points: 1 },
-      { id: 10, category: "Nutrition", text: "No slop", points: 1 },
-      { id: 11, category: "Face", text: "Mewing all day", points: 1 },
+      { id: 6, category: "Fitness", text: "Posturemaxxing", points: 2 },
+      { id: 7, category: "Fitness", text: "Cold Showermaxx", points: 2 },
+      { id: 8, category: "Nutrition", text: "Proteinmaxxing", points: 3 },
+      { id: 9, category: "Nutrition", text: "5g Creatine", points: 2 },
+      { id: 10, category: "Nutrition", text: "No slop", points: 2 },
+      { id: 11, category: "Face", text: "Mewing all day", points: 2 },
       { id: 12, category: "Face", text: "Nosebreathingmaxx", points: 1 },
-      { id: 13, category: "Face", text: "Gumchad (chew 20+ min)", points: 1 },
-      { id: 14, category: "Grooming", text: "Teethmaxxing", points: 1 },
-      { id: 15, category: "Grooming", text: "Showermog", points: 1 },
-      { id: 16, category: "Grooming", text: "PM Skincaremog", points: 2 },
-      { id: 17, category: "Discipline", text: "Nofap NoGoon", points: 3 }
+      { id: 13, category: "Face", text: "Gumchad (chew 20+ min)", points: 2 },
+      { id: 14, category: "Grooming", text: "PM Skincaremog", points: 2 },
+      { id: 15, category: "Discipline", text: "Nofapmaxxing (no gooning)", points: 3 }
     ];
 
     let data = JSON.parse(localStorage.getItem('chudxData')) || {};
     const today = new Date().toISOString().split('T')[0];
-    const MAX_POINTS = 27;
+    const MAX_POINTS = 35;
 
     function getLetterGrade(points) {
       const percent = (points / MAX_POINTS) * 100;
@@ -144,7 +142,7 @@
           }
         });
       }
-      if (dayData.strength) score += 2;
+      if (dayData.strength) score += 3;   // Gymmaxxed now worth 3 pts
       return score;
     }
 
@@ -203,16 +201,12 @@
       while (true) {
         const dateStr = date.toISOString().split('T')[0];
         const dayData = data[dateStr];
-        if (dayData && calculateScore(dayData) >= 19) {
+        if (dayData && calculateScore(dayData) >= 24) {
           streak++;
           date.setDate(date.getDate() - 1);
         } else break;
       }
       document.getElementById('streak-count').textContent = streak;
-    }
-
-    function getGradeColor(bg) {
-      return bg;
     }
 
     function renderCalendar() {
@@ -227,7 +221,6 @@
       const firstDay = new Date(year, month, 1).getDay();
       const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-      // Empty slots before first day
       for (let i = 0; i < firstDay; i++) {
         const empty = document.createElement('div');
         grid.appendChild(empty);
@@ -241,9 +234,7 @@
 
         const dayEl = document.createElement('div');
         dayEl.className = `calendar-day text-zinc-300 ${score > 0 ? 'has-data' : ''}`;
-        if (score > 0) {
-          dayEl.style.backgroundColor = gradeInfo.bg;
-        }
+        if (score > 0) dayEl.style.backgroundColor = gradeInfo.bg;
         dayEl.textContent = day;
         grid.appendChild(dayEl);
       }
@@ -270,23 +261,4 @@
     }
 
     function init() {
-      document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-      if (!data[today]) data[today] = { habits: {}, notes: '', strength: false };
-
-      renderHabits();
-      updateScore();
-      loadNotes();
-
-      const strengthToggle = document.getElementById('strength-toggle');
-      strengthToggle.checked = data[today].strength || false;
-      strengthToggle.addEventListener('change', () => {
-        data[today].strength = strengthToggle.checked;
-        saveData();
-        updateScore();
-      });
-    }
-
-    init();
-  </script>
-</body>
-</html>
+      document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', { weekday
