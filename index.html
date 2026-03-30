@@ -36,13 +36,19 @@
         <div id="score-detail" class="text-zinc-400 text-sm">0/35 • 0%</div>
       </div>
 
-      <!-- Gym Volume Slider -->
+      <!-- Gymmaxxed Toggle + Volume Input -->
       <div class="mt-6 bg-zinc-800 rounded-2xl p-4">
-        <div class="flex justify-between text-sm mb-2">
-          <span class="font-medium">Gym Volume (weight lifted)</span>
-          <span id="gym-value" class="font-mono">0%</span>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm font-medium">Gymmaxxed?</span>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="gym-toggle" class="sr-only peer">
+            <div class="w-14 h-7 bg-zinc-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
         </div>
-        <input type="range" id="gym-slider" min="0" max="100" value="0" class="w-full accent-emerald-400">
+        <div id="volume-input" class="hidden">
+          <label class="text-xs text-zinc-400 mb-1 block">Volume today (kg lifted)</label>
+          <input type="number" id="gym-volume" placeholder="0" class="w-full bg-zinc-900 text-white px-4 py-3 rounded-2xl text-lg font-mono">
+        </div>
       </div>
     </div>
 
@@ -56,12 +62,6 @@
     <div>
       <h3 class="text-emerald-400 font-medium mb-3 text-sm tracking-widest">QUANTITATIVE (MEASURED)</h3>
       <div id="quant-list" class="space-y-1"></div>
-    </div>
-
-    <!-- NOTES -->
-    <div class="mt-10">
-      <label class="block text-sm text-zinc-400 mb-2">Daily notes (optional)</label>
-      <textarea id="notes" rows="3" class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-sm resize-none focus:outline-none focus:border-emerald-400" placeholder="How did you feel?"></textarea>
     </div>
   </div>
 
@@ -90,7 +90,7 @@
   <!-- PAGE 3: STATS -->
   <div id="page-stats" class="page max-w-md mx-auto p-6">
     <h1 class="text-3xl font-bold tracking-tighter mb-6">Stats</h1>
-    <div class="bg-zinc-900 rounded-3xl p-6 space-y-6">
+    <div class="bg-zinc-900 rounded-3xl p-6 space-y-8">
       <div>
         <div class="text-sm text-zinc-400">Current Streak</div>
         <div id="stats-streak" class="text-5xl font-black text-emerald-400">0 days 🔥</div>
@@ -98,6 +98,10 @@
       <div>
         <div class="text-sm text-zinc-400">Average Score (last 14 days)</div>
         <div id="stats-average" class="text-5xl font-black">0%</div>
+      </div>
+      <div>
+        <div class="text-sm text-zinc-400 mb-4">Gym Volume Progress (weekly average kg)</div>
+        <div id="gym-progress" class="flex gap-2"></div>
       </div>
       <div>
         <div class="text-sm text-zinc-400 mb-3">Recent Days</div>
@@ -125,25 +129,24 @@
   </div>
 
   <script>
-    // === HABITS SPLIT INTO TWO CATEGORIES ===
-    const binaryHabits = [  // Y/N only
-      { id: 1, category: "Binary", text: "Watermaxxing (3–4L)", points: 2 },
-      { id: 2, category: "Binary", text: "AM Skincaremog", points: 2 },
-      { id: 3, category: "Binary", text: "Mewing all day", points: 2 },
-      { id: 4, category: "Binary", text: "Gumchad (chew 20+ min)", points: 2 },
-      { id: 5, category: "Binary", text: "PM Skincaremog", points: 2 },
-      { id: 6, category: "Binary", text: "Nofapmaxxing (no gooning)", points: 3 }
+    const binaryHabits = [
+      { id: 1, text: "Watermaxxing (3–4L)", points: 2 },
+      { id: 2, text: "AM Skincaremog", points: 2 },
+      { id: 3, text: "Mewing all day", points: 2 },
+      { id: 4, text: "Gumchad (chew 20+ min)", points: 2 },
+      { id: 5, text: "PM Skincaremog", points: 2 },
+      { id: 6, text: "Nofapmaxxing (no gooning)", points: 3 },
+      { id: 7, text: "Posturemaxxing", points: 2 },
+      { id: 8, text: "Cold Showermaxx", points: 2 }
     ];
 
-    const quantHabits = [  // Numbers / sliders
-      { id: 7, category: "Quant", text: "Sleepmaxxing", unit: "hours", max: 12, points: 3 },
-      { id: 8, category: "Quant", text: "Sunmaxxing", unit: "min", max: 30, points: 2 },
-      { id: 9, category: "Quant", text: "10k Stepmaxx", unit: "steps", max: 15000, points: 2 },
-      { id: 10, category: "Quant", text: "Proteinmaxxing", unit: "g", max: 250, points: 3 },
-      { id: 11, category: "Quant", text: "5g Creatine", unit: "yes", max: 1, points: 2 }, // 0 or 1
-      { id: 12, category: "Quant", text: "Posturemaxxing", unit: "hours", max: 16, points: 2 },
-      { id: 13, category: "Quant", text: "Cold Showermaxx", unit: "min", max: 5, points: 2 },
-      { id: 14, category: "Quant", text: "No slop", unit: "clean meals", max: 5, points: 2 }
+    const quantHabits = [
+      { id: 9, text: "Sleepmaxxing", unit: "hours", max: 12, points: 3 },
+      { id: 10, text: "Sunmaxxing", unit: "min", max: 30, points: 2 },
+      { id: 11, text: "10k Stepmaxx", unit: "steps", max: 15000, points: 2 },
+      { id: 12, text: "Proteinmaxxing", unit: "g", max: 250, points: 3 },
+      { id: 13, text: "5g Creatine", unit: "yes", max: 1, points: 2 },
+      { id: 14, text: "No slop", unit: "clean meals", max: 5, points: 2 }
     ];
 
     let data = JSON.parse(localStorage.getItem('chudxData')) || {};
@@ -167,26 +170,14 @@
     function calculateScore(dayData) {
       if (!dayData) return 0;
       let score = 0;
-
-      // Binary
-      binaryHabits.forEach(h => {
-        if (dayData.binary && dayData.binary[h.id]) score += h.points;
-      });
-
-      // Quantitative
+      binaryHabits.forEach(h => { if (dayData.binary && dayData.binary[h.id]) score += h.points; });
       quantHabits.forEach(h => {
         if (dayData.quant && dayData.quant[h.id] !== undefined) {
           const value = parseFloat(dayData.quant[h.id]) || 0;
-          const percent = Math.min(value / h.max, 1);
-          score += Math.round(h.points * percent);
+          score += Math.round(h.points * Math.min(value / h.max, 1));
         }
       });
-
-      // Gym slider
-      if (dayData.gymVolume !== undefined) {
-        score += Math.round(3 * (dayData.gymVolume / 100));
-      }
-
+      if (dayData.gym) score += 3;
       return score;
     }
 
@@ -194,19 +185,15 @@
       const container = document.getElementById('binary-list');
       container.innerHTML = '';
       binaryHabits.forEach(h => {
-        const checked = data[today] && data[today].binary && data[today].binary[h.id] ? true : false;
+        const checked = data[today] && data[today].binary && data[today].binary[h.id];
         const div = document.createElement('div');
         div.className = 'habit-item flex items-center gap-3 bg-zinc-900 px-5 py-4 rounded-2xl';
-        div.innerHTML = `
-          <input type="checkbox" id="b${h.id}" ${checked ? 'checked' : ''} class="w-5 h-5 accent-emerald-400">
-          <label for="b${h.id}" class="flex-1 text-[15px] cursor-pointer">${h.text}</label>
-        `;
+        div.innerHTML = `<input type="checkbox" id="b${h.id}" ${checked ? 'checked' : ''} class="w-5 h-5 accent-emerald-400"><label for="b${h.id}" class="flex-1 text-[15px] cursor-pointer">${h.text}</label>`;
         container.appendChild(div);
         div.querySelector('input').addEventListener('change', e => {
-          if (!data[today]) data[today] = { binary: {}, quant: {}, gymVolume: 0, notes: '' };
+          if (!data[today]) data[today] = { binary: {}, quant: {}, gym: false, gymVolume: 0 };
           data[today].binary[h.id] = e.target.checked;
-          saveData();
-          updateScore();
+          saveData(); updateScore();
         });
       });
     }
@@ -218,18 +205,12 @@
         const value = data[today] && data[today].quant && data[today].quant[h.id] !== undefined ? data[today].quant[h.id] : 0;
         const div = document.createElement('div');
         div.className = 'habit-item flex items-center gap-3 bg-zinc-900 px-5 py-4 rounded-2xl';
-        div.innerHTML = `
-          <label class="flex-1 text-[15px]">${h.text}</label>
-          <input type="number" id="q${h.id}" value="${value}" min="0" max="${h.max}" 
-                 class="w-20 bg-zinc-800 text-white text-right px-3 py-1 rounded-xl font-mono">
-          <span class="text-xs text-zinc-400">${h.unit}</span>
-        `;
+        div.innerHTML = `<label class="flex-1 text-[15px]">${h.text}</label><input type="number" id="q${h.id}" value="${value}" min="0" max="${h.max}" class="w-20 bg-zinc-800 text-white text-right px-3 py-1 rounded-xl font-mono"><span class="text-xs text-zinc-400">${h.unit}</span>`;
         container.appendChild(div);
         div.querySelector('input').addEventListener('input', e => {
-          if (!data[today]) data[today] = { binary: {}, quant: {}, gymVolume: 0, notes: '' };
+          if (!data[today]) data[today] = { binary: {}, quant: {}, gym: false, gymVolume: 0 };
           data[today].quant[h.id] = parseFloat(e.target.value) || 0;
-          saveData();
-          updateScore();
+          saveData(); updateScore();
         });
       });
     }
@@ -238,66 +219,108 @@
       const dayData = data[today] || {};
       const score = calculateScore(dayData);
       const gradeInfo = getLetterGrade(score);
-
       document.getElementById('grade').textContent = gradeInfo.grade;
       document.getElementById('grade').className = `text-7xl font-black mb-1 ${gradeInfo.color}`;
       document.getElementById('score-detail').textContent = `${score}/${MAX_POINTS} • ${Math.round((score/MAX_POINTS)*100)}%`;
       document.getElementById('progress').style.width = `${(score/MAX_POINTS)*100}%`;
-
       updateStreak();
     }
 
-    function updateStreak() { /* same as before */ 
+    function updateStreak() {
       let streak = 0;
       let date = new Date(today);
       while (true) {
         const dateStr = date.toISOString().split('T')[0];
         const dayData = data[dateStr];
-        if (dayData && calculateScore(dayData) >= 24) {
-          streak++;
-          date.setDate(date.getDate() - 1);
-        } else break;
+        if (dayData && calculateScore(dayData) >= 24) { streak++; date.setDate(date.getDate() - 1); } else break;
       }
       document.getElementById('streak-count').textContent = streak;
     }
 
-    // Calendar, Stats, switchPage, saveData, loadNotes, init — all unchanged from the working multi-page version
-    function renderCalendar() { /* same as previous */ }
-    function renderStats() { /* same */ }
-    function switchPage(pageIndex) { /* same */ }
-    function saveData() { localStorage.setItem('chudxData', JSON.stringify(data)); }
+    function renderCalendar() {
+      const grid = document.getElementById('calendar-grid'); grid.innerHTML = '';
+      const currentDate = new Date(); const year = currentDate.getFullYear(); const month = currentDate.getMonth();
+      document.getElementById('calendar-month').textContent = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const dayData = data[dateStr]; const score = dayData ? calculateScore(dayData) : 0;
+        const gradeInfo = score > 0 ? getLetterGrade(score) : null;
+        const dayEl = document.createElement('div');
+        dayEl.className = `calendar-day text-zinc-300 ${score > 0 ? 'has-data' : ''}`;
+        if (score > 0) dayEl.style.backgroundColor = gradeInfo.bg;
+        dayEl.textContent = day;
+        grid.appendChild(dayEl);
+      }
+    }
 
-    function loadDailyListeners() {
-      const notesEl = document.getElementById('notes');
-      if (data[today] && data[today].notes) notesEl.value = data[today].notes;
-      notesEl.addEventListener('input', () => {
-        if (!data[today]) data[today] = { binary: {}, quant: {}, gymVolume: 0, notes: '' };
-        data[today].notes = notesEl.value;
-        saveData();
-      });
+    function renderStats() {
+      const streakEl = document.getElementById('stats-streak');
+      streakEl.textContent = document.getElementById('streak-count').textContent + ' days 🔥';
 
-      // Gym slider live update
-      const slider = document.getElementById('gym-slider');
-      const valueEl = document.getElementById('gym-value');
-      slider.value = data[today] && data[today].gymVolume !== undefined ? data[today].gymVolume : 0;
-      valueEl.textContent = slider.value + '%';
-      slider.addEventListener('input', () => {
-        valueEl.textContent = slider.value + '%';
-        if (!data[today]) data[today] = { binary: {}, quant: {}, gymVolume: 0, notes: '' };
-        data[today].gymVolume = parseInt(slider.value);
-        saveData();
-        updateScore();
+      const recent = Object.keys(data).sort().reverse().slice(0,7);
+      const container = document.getElementById('stats-recent');
+      container.innerHTML = recent.map(date => {
+        const score = calculateScore(data[date]);
+        const grade = getLetterGrade(score);
+        return `<div class="flex justify-between bg-zinc-800 px-4 py-3 rounded-2xl"><span>${date}</span><span class="${grade.color} font-bold">${grade.grade} (${score})</span></div>`;
+      }).join('');
+
+      // Gym Volume Weekly Progress (simple bars)
+      const progressContainer = document.getElementById('gym-progress');
+      progressContainer.innerHTML = '';
+      const weeks = [7,14,21,28]; // last 4 weeks
+      weeks.forEach(days => {
+        const weekData = Object.keys(data).filter(d => {
+          const diff = Math.floor((new Date(today) - new Date(d)) / (1000*60*60*24));
+          return diff >= days-7 && diff < days;
+        });
+        let total = 0, count = 0;
+        weekData.forEach(d => { if (data[d].gymVolume) { total += data[d].gymVolume; count++; } });
+        const avg = count ? Math.round(total / count) : 0;
+        const barHTML = `<div class="flex-1 text-center"><div class="text-[10px] text-zinc-400">Wk ${Math.round(days/7)}</div><div class="h-24 bg-zinc-800 rounded-2xl flex items-end p-1"><div class="w-full bg-emerald-400 rounded-xl" style="height: ${Math.min(avg/10,100)}%"></div></div><div class="text-xs font-mono mt-1">${avg}kg</div></div>`;
+        progressContainer.innerHTML += barHTML;
       });
     }
 
+    function switchPage(pageIndex) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(['page-daily','page-calendar','page-stats'][pageIndex]).classList.add('active');
+      document.querySelectorAll('.nav-item').forEach((btn, i) => btn.classList.toggle('active-nav', i === pageIndex));
+      if (pageIndex === 1) renderCalendar();
+      if (pageIndex === 2) renderStats();
+    }
+
+    function saveData() { localStorage.setItem('chudxData', JSON.stringify(data)); }
+
     function init() {
       document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-      if (!data[today]) data[today] = { binary: {}, quant: {}, gymVolume: 0, notes: '' };
+      if (!data[today]) data[today] = { binary: {}, quant: {}, gym: false, gymVolume: 0 };
 
       renderBinary();
       renderQuant();
       updateScore();
-      loadDailyListeners();
+
+      // Gym toggle + volume
+      const toggle = document.getElementById('gym-toggle');
+      const volumeBox = document.getElementById('volume-input');
+      const volumeInput = document.getElementById('gym-volume');
+      toggle.checked = data[today].gym || false;
+      if (toggle.checked) volumeBox.classList.remove('hidden');
+      volumeInput.value = data[today].gymVolume || 0;
+
+      toggle.addEventListener('change', () => {
+        data[today].gym = toggle.checked;
+        if (toggle.checked) volumeBox.classList.remove('hidden'); else volumeBox.classList.add('hidden');
+        saveData(); updateScore();
+      });
+      volumeInput.addEventListener('input', () => {
+        data[today].gymVolume = parseFloat(volumeInput.value) || 0;
+        saveData(); updateScore();
+      });
+
       switchPage(0);
     }
 
