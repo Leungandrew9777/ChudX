@@ -42,7 +42,7 @@
         <div id="score-detail" class="text-zinc-400 text-sm">0/35 • 0%</div>
       </div>
 
-      <!-- Gymmaxxed? Toggle (now worth 3 pts for bodybuilding focus) -->
+      <!-- Gymmaxxed? Toggle -->
       <div class="mt-6 flex items-center justify-center gap-4 bg-zinc-800 rounded-2xl p-4">
         <span class="text-sm font-medium">Gymmaxxed?</span>
         <label class="relative inline-flex items-center cursor-pointer">
@@ -57,7 +57,7 @@
       </div>
     </div>
 
-    <!-- HABITS LIST -->
+    <!-- HABITS LIST (this is the part that was missing) -->
     <div id="habits-list" class="space-y-8"></div>
 
     <!-- NOTES -->
@@ -71,7 +71,7 @@
       VIEW CALENDAR
     </button>
 
-    <!-- HISTORY MODAL (color-gradient calendar) -->
+    <!-- HISTORY MODAL -->
     <div id="history-modal" class="hidden fixed inset-0 bg-black/80 flex items-end">
       <div class="bg-zinc-900 w-full max-h-[85vh] overflow-auto rounded-t-3xl p-6">
         <div class="flex justify-between items-center mb-6">
@@ -142,7 +142,7 @@
           }
         });
       }
-      if (dayData.strength) score += 3;   // Gymmaxxed now worth 3 pts
+      if (dayData.strength) score += 3;
       return score;
     }
 
@@ -261,4 +261,23 @@
     }
 
     function init() {
-      document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', { weekday
+      document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      if (!data[today]) data[today] = { habits: {}, notes: '', strength: false };
+
+      renderHabits();
+      updateScore();
+      loadNotes();
+
+      const strengthToggle = document.getElementById('strength-toggle');
+      strengthToggle.checked = data[today].strength || false;
+      strengthToggle.addEventListener('change', () => {
+        data[today].strength = strengthToggle.checked;
+        saveData();
+        updateScore();
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
