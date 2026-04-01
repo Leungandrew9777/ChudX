@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ChudX</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    .habit-item { transition: all 0.2s; }
+    .habit-item { transition: background 0.2s; }
     .habit-item:hover { background-color: #27272a; }
     .score-bar { transition: width 0.4s ease; }
     .calendar-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 600; border-radius: 9999px; transition: all 0.2s; }
@@ -16,319 +17,570 @@
     .bottom-nav { padding-bottom: env(safe-area-inset-bottom); }
     .nav-item { transition: all 0.2s; }
     .nav-item.active-nav { color: #10b981; }
-    .nav-item.active-nav span:first-child { transform: scale(1.1); }
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .syncing { animation: pulse 1s infinite; background:#facc15; }
+    .synced  { background: #10b981; }
+    .offline { background: #ef4444; }
+    .auth-input { width:100%; background:#27272a; color:#fff; border:1px solid #3f3f46;
+                  border-radius:12px; padding:12px 16px; font-size:15px; outline:none;
+                  transition: border-color 0.2s; }
+    .auth-input:focus { border-color:#10b981; }
+    .auth-btn   { width:100%; background:#10b981; color:#fff; font-weight:600;
+                  font-size:15px; padding:14px; border-radius:12px; border:none;
+                  cursor:pointer; transition: background 0.2s; }
+    .auth-btn:hover   { background:#059669; }
+    .auth-btn:disabled { background:#3f3f46; cursor:not-allowed; }
+    .auth-link { color:#10b981; cursor:pointer; font-size:14px; text-decoration:underline; }
   </style>
 </head>
-<body class="bg-zinc-950 text-white min-h-screen pb-20">
+<body class="bg-zinc-950 text-white min-h-screen">
 
-  <!-- PAGE 1: DAILY -->
-  <div id="page-daily" class="page active max-w-md mx-auto p-6">
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-3xl font-bold tracking-tighter">CHUDX</h1>
-      <div id="streak" class="flex items-center gap-1 bg-zinc-900 px-4 py-1 rounded-full text-sm font-medium">
-        🔥 <span id="streak-count">0</span>
+  <!-- ═══════════════════════════════════════════════════════════
+       SETUP INSTRUCTIONS — fill in your Supabase credentials
+       ═══════════════════════════════════════════════════════════
+    1. Go to https://supabase.com → New Project
+    2. Settings → API → copy "Project URL" and "anon public" key
+    3. Paste them into SUPABASE_URL and SUPABASE_ANON_KEY below
+    4. Go to SQL Editor in Supabase and run this once:
+
+       create table habits (
+         id         uuid primary key default gen_random_uuid(),
+         user_id    uuid references auth.users(id) on delete cascade not null,
+         date       text not null,
+         payload    jsonb not null,
+         updated_at timestamptz default now(),
+         unique(user_id, date)
+       );
+       alter table habits enable row level security;
+       create policy "own data only" on habits for all
+         using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+    5. Authentication → Providers → Email → disable "Confirm email"
+       (so you can log in immediately without email verification)
+  ════════════════════════════════════════════════════════════════ -->
+
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen" class="hidden max-w-sm mx-auto px-6 pt-24 pb-10">
+    <h1 class="text-4xl font-black tracking-tighter mb-2">CHUDX</h1>
+    <p class="text-zinc-400 text-sm mb-10">Sign in to sync your habits across devices.</p>
+
+    <div class="space-y-4">
+      <div>
+        <label class="text-xs text-zinc-400 mb-1 block">Email</label>
+        <input id="auth-email" type="email" placeholder="you@example.com" class="auth-input">
       </div>
-    </div>
 
-    <div class="bg-zinc-900 rounded-3xl p-6 mb-8">
-      <div class="text-center">
-        <div id="date" class="text-zinc-400 text-sm mb-1"></div>
-        <div id="grade" class="text-7xl font-black mb-1">F</div>
-        <div id="score-detail" class="text-zinc-400 text-sm">0/35 • 0%</div>
+      <div id="password-field">
+        <label class="text-xs text-zinc-400 mb-1 block">Password</label>
+        <input id="auth-password" type="password" placeholder="••••••••" class="auth-input">
       </div>
 
-      <!-- Gymmaxxed Toggle + Volume -->
-      <div class="mt-6 bg-zinc-800 rounded-2xl p-4">
-        <div class="flex items-center justify-between mb-3">
-          <span class="text-sm font-medium">Gymmaxxed?</span>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="gym-toggle" class="sr-only peer">
-            <div class="w-14 h-7 bg-zinc-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500"></div>
-          </label>
-        </div>
-        <div id="volume-input" class="hidden">
-          <label class="text-xs text-zinc-400 mb-1 block">Volume today (kg lifted)</label>
-          <input type="number" id="gym-volume" placeholder="0" class="w-full bg-zinc-900 text-white px-4 py-3 rounded-2xl text-lg font-mono">
-        </div>
+      <button id="auth-submit" class="auth-btn" onclick="handleAuth()">Sign In</button>
+
+      <div id="auth-error" class="text-red-400 text-sm text-center hidden"></div>
+
+      <div class="flex flex-col items-center gap-2 pt-2">
+        <span id="auth-toggle-label" class="text-zinc-400 text-sm">
+          No account?
+          <span class="auth-link" onclick="toggleAuthMode()">Create one</span>
+        </span>
+        <span class="text-zinc-400 text-sm">or</span>
+        <span class="auth-link" onclick="sendMagicLink()">Send magic link instead</span>
       </div>
 
-      <!-- Progress bar -->
-      <div class="h-2 bg-zinc-800 rounded-full mt-6 overflow-hidden">
-        <div id="progress" class="h-2 bg-emerald-400 score-bar w-0"></div>
+      <div id="magic-sent" class="hidden text-center text-emerald-400 text-sm pt-2">
+        ✓ Magic link sent — check your email!
       </div>
-    </div>
-
-    <!-- BINARY -->
-    <div class="mb-8">
-      <h3 class="text-emerald-400 font-medium mb-3 text-sm tracking-widest">BINARY (Y/N)</h3>
-      <div id="binary-list" class="space-y-1"></div>
-    </div>
-
-    <!-- QUANTITATIVE -->
-    <div>
-      <h3 class="text-emerald-400 font-medium mb-3 text-sm tracking-widest">QUANTITATIVE (MEASURED)</h3>
-      <div id="quant-list" class="space-y-1"></div>
     </div>
   </div>
 
-  <!-- PAGE 2: CALENDAR -->
-  <div id="page-calendar" class="page max-w-md mx-auto p-6">
-    <h1 class="text-3xl font-bold tracking-tighter mb-6">Calendar</h1>
-    <div class="bg-zinc-900 rounded-3xl p-6">
+  <!-- LOADING SCREEN -->
+  <div id="loading-screen" class="flex flex-col items-center justify-center min-h-screen gap-4">
+    <h1 class="text-4xl font-black tracking-tighter">CHUDX</h1>
+    <div class="text-zinc-500 text-sm">Loading...</div>
+  </div>
+
+  <!-- APP WRAPPER (hidden until logged in) -->
+  <div id="app" class="hidden pb-20">
+
+    <!-- PAGE: DAILY -->
+    <div id="page-daily" class="page active max-w-md mx-auto p-6">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="text-xl font-bold" id="calendar-month">March 2026</h2>
+        <h1 class="text-3xl font-bold tracking-tighter">CHUDX</h1>
+        <div class="flex items-center gap-2">
+          <!-- Sync status indicator -->
+          <div class="flex items-center gap-1.5 bg-zinc-900 px-3 py-1 rounded-full">
+            <span class="sync-dot synced" id="sync-dot"></span>
+            <span class="text-xs text-zinc-400" id="sync-label">Synced</span>
+          </div>
+          <div class="flex items-center gap-1 bg-zinc-900 px-4 py-1 rounded-full text-sm font-medium">
+            🔥 <span id="streak-count">0</span>
+          </div>
+        </div>
       </div>
-      <div class="grid grid-cols-7 gap-1 text-center text-xs text-zinc-400 mb-2">
-        <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
-      </div>
-      <div id="calendar-grid" class="grid grid-cols-7 gap-1"></div>
-    </div>
-    <div class="mt-6 text-[10px] text-zinc-500 flex flex-wrap gap-x-4 gap-y-1 justify-center">
-      <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-yellow-400"></div>S</div>
-      <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-emerald-400"></div>A</div>
-      <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-cyan-400"></div>B</div>
-      <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-blue-400"></div>C</div>
-      <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-orange-400"></div>D</div>
-      <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-red-500"></div>F</div>
-    </div>
-  </div>
 
-  <!-- PAGE 3: STATS -->
-  <div id="page-stats" class="page max-w-md mx-auto p-6">
-    <h1 class="text-3xl font-bold tracking-tighter mb-6">Stats</h1>
-    <div class="bg-zinc-900 rounded-3xl p-6 space-y-8">
-      <div>
-        <div class="text-sm text-zinc-400">Current Streak</div>
-        <div id="stats-streak" class="text-5xl font-black text-emerald-400">0 days 🔥</div>
-      </div>
-      <div>
-        <div class="text-sm text-zinc-400">Average Score (last 14 days)</div>
-        <div id="stats-average" class="text-5xl font-black">0%</div>
-      </div>
-      <div>
-        <div class="text-sm text-zinc-400 mb-4">Gym Volume Progress (weekly avg kg)</div>
-        <div id="gym-progress" class="flex gap-2"></div>
-      </div>
-      <div>
-        <div class="text-sm text-zinc-400 mb-3">Recent Days</div>
-        <div id="stats-recent" class="space-y-3"></div>
-      </div>
-    </div>
-  </div>
+      <div class="bg-zinc-900 rounded-3xl p-6 mb-8">
+        <div class="text-center">
+          <div id="date" class="text-zinc-400 text-sm mb-1"></div>
+          <div id="grade" class="text-7xl font-black mb-1 text-red-500">F</div>
+          <div id="score-detail" class="text-zinc-400 text-sm">0/32 • 0%</div>
+        </div>
 
-  <!-- BOTTOM NAV -->
-  <div class="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-700 max-w-md mx-auto bottom-nav">
-    <div class="flex justify-around items-center px-4 py-2">
-      <button onclick="switchPage(0)" class="nav-item flex-1 flex flex-col items-center active-nav">
-        <span class="text-3xl mb-1">🏠</span>
-        <span class="text-xs font-medium">Daily</span>
-      </button>
-      <button onclick="switchPage(1)" class="nav-item flex-1 flex flex-col items-center">
-        <span class="text-3xl mb-1">📅</span>
-        <span class="text-xs font-medium">Calendar</span>
-      </button>
-      <button onclick="switchPage(2)" class="nav-item flex-1 flex flex-col items-center">
-        <span class="text-3xl mb-1">📊</span>
-        <span class="text-xs font-medium">Stats</span>
+        <div class="mt-6 bg-zinc-800 rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium">Gymmaxxed?</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="gym-toggle" class="sr-only peer">
+              <div class="w-14 h-7 bg-zinc-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500"></div>
+            </label>
+          </div>
+          <div id="volume-input" class="hidden">
+            <label class="text-xs text-zinc-400 mb-1 block">Volume today (kg lifted)</label>
+            <input type="number" id="gym-volume" placeholder="0" class="w-full bg-zinc-900 text-white px-4 py-3 rounded-2xl text-lg font-mono">
+          </div>
+        </div>
+
+        <div class="h-2 bg-zinc-800 rounded-full mt-6 overflow-hidden">
+          <div id="progress" class="h-2 bg-emerald-400 score-bar w-0"></div>
+        </div>
+      </div>
+
+      <div class="mb-8">
+        <h3 class="text-emerald-400 font-medium mb-3 text-sm tracking-widest">BINARY (Y/N)</h3>
+        <div id="binary-list" class="space-y-1"></div>
+      </div>
+
+      <div class="mb-8">
+        <h3 class="text-emerald-400 font-medium mb-3 text-sm tracking-widest">QUANTITATIVE (MEASURED)</h3>
+        <div id="quant-list" class="space-y-1"></div>
+      </div>
+
+      <button onclick="signOut()"
+        class="w-full text-zinc-600 hover:text-zinc-400 text-sm py-2 transition">
+        Sign out
       </button>
     </div>
-  </div>
+
+    <!-- PAGE: CALENDAR -->
+    <div id="page-calendar" class="page max-w-md mx-auto p-6">
+      <h1 class="text-3xl font-bold tracking-tighter mb-6">Calendar</h1>
+      <div class="bg-zinc-900 rounded-3xl p-6">
+        <div class="flex justify-between items-center mb-6">
+          <button onclick="shiftMonth(-1)" class="text-zinc-400 hover:text-white px-2 text-xl transition">&#8592;</button>
+          <h2 class="text-xl font-bold" id="calendar-month"></h2>
+          <button onclick="shiftMonth(1)"  class="text-zinc-400 hover:text-white px-2 text-xl transition">&#8594;</button>
+        </div>
+        <div class="grid grid-cols-7 gap-1 text-center text-xs text-zinc-400 mb-2">
+          <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
+        </div>
+        <div id="calendar-grid" class="grid grid-cols-7 gap-1"></div>
+      </div>
+      <div class="mt-6 text-[10px] text-zinc-500 flex flex-wrap gap-x-4 gap-y-1 justify-center">
+        <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-yellow-400"></div>S</div>
+        <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-emerald-400"></div>A</div>
+        <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-cyan-400"></div>B</div>
+        <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-blue-400"></div>C</div>
+        <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-orange-400"></div>D</div>
+        <div class="flex items-center gap-1"><div class="w-3 h-3 rounded-full bg-red-500"></div>F</div>
+      </div>
+    </div>
+
+    <!-- PAGE: STATS -->
+    <div id="page-stats" class="page max-w-md mx-auto p-6">
+      <h1 class="text-3xl font-bold tracking-tighter mb-6">Stats</h1>
+      <div class="bg-zinc-900 rounded-3xl p-6 space-y-8">
+        <div>
+          <div class="text-sm text-zinc-400">Current Streak</div>
+          <div id="stats-streak" class="text-5xl font-black text-emerald-400">0 days 🔥</div>
+        </div>
+        <div>
+          <div class="text-sm text-zinc-400">Average Score (last 14 days)</div>
+          <div id="stats-average" class="text-5xl font-black">0%</div>
+        </div>
+        <div>
+          <div class="text-sm text-zinc-400 mb-4">Gym Volume Progress (weekly avg kg)</div>
+          <div id="gym-progress" class="flex gap-2"></div>
+        </div>
+        <div>
+          <div class="text-sm text-zinc-400 mb-3">Recent Days</div>
+          <div id="stats-recent" class="space-y-3"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <div class="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-700 max-w-md mx-auto bottom-nav">
+      <div class="flex justify-around items-center px-4 py-2">
+        <button onclick="switchPage(0)" class="nav-item flex-1 flex flex-col items-center active-nav">
+          <span class="text-3xl mb-1">🏠</span>
+          <span class="text-xs font-medium">Daily</span>
+        </button>
+        <button onclick="switchPage(1)" class="nav-item flex-1 flex flex-col items-center">
+          <span class="text-3xl mb-1">📅</span>
+          <span class="text-xs font-medium">Calendar</span>
+        </button>
+        <button onclick="switchPage(2)" class="nav-item flex-1 flex flex-col items-center">
+          <span class="text-3xl mb-1">📊</span>
+          <span class="text-xs font-medium">Stats</span>
+        </button>
+      </div>
+    </div>
+  </div><!-- /app -->
 
   <script>
-    const binaryHabits = [
-      { id: 1, text: "Watermaxxing (3–4L)", points: 2 },
-      { id: 2, text: "AM Skincaremog", points: 2 },
-      { id: 3, text: "Mewing all day", points: 2 },
-      { id: 4, text: "Gumchad (chew 20+ min)", points: 2 },
-      { id: 5, text: "PM Skincaremog", points: 2 },
-      { id: 6, text: "Nofapmaxxing (no gooning)", points: 3 },
-      { id: 7, text: "Posturemaxxing", points: 2 },
-      { id: 8, text: "Cold Showermaxx", points: 2 }
+    // ─── SUPABASE SETUP ──────────────────────────────────────────────────────
+    // ⚠️  Replace these two values with your own from supabase.com → Settings → API
+    const SUPABASE_URL      = 'https://gamzurlvzctuxyxwhyqj.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_blWPq0j57HNhJjx1HNvimQ_7_CvC5_e';
+
+    const { createClient } = supabase;
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ─── CONFIG ──────────────────────────────────────────────────────────────
+    const BINARY_HABITS = [
+      { id: 1,  text: "Watermaxxing (3–4L)",       points: 2 },
+      { id: 2,  text: "AM Skincaremog",             points: 2 },
+      { id: 3,  text: "Mewing all day",             points: 2 },
+      { id: 4,  text: "Gumchad (chew 20+ min)",    points: 2 },
+      { id: 5,  text: "PM Skincaremog",             points: 2 },
+      { id: 6,  text: "Nofapmaxxing (no gooning)",  points: 3 },
+      { id: 7,  text: "Posturemaxxing",             points: 2 },
+      { id: 8,  text: "Cold Showermaxx",            points: 2 },
+    ];
+    const QUANT_HABITS = [
+      { id: 9,  text: "Sleepmaxxing",    unit: "hours",       max: 8,     points: 3 },
+      { id: 10, text: "10k Stepmaxx",    unit: "steps",       max: 10000, points: 2 },
+      { id: 11, text: "Proteinmaxxing",  unit: "g",           max: 200,   points: 3 },
+      { id: 12, text: "Creatinemaxxing", unit: "g",           max: 5,     points: 2 },
+      { id: 13, text: "No slop",         unit: "clean meals", max: 3,     points: 2 },
+    ];
+    const MAX_POINTS         = 32;
+    const STREAK_THRESHOLD   = Math.round(MAX_POINTS * 0.75);
+    const TARGET_WEEKLY_AVG  = 150;
+    const GRADES = [
+      { min: 95, grade: 'S',  color: 'text-yellow-400', bg: '#FACC15' },
+      { min: 90, grade: 'A+', color: 'text-emerald-400', bg: '#10B981' },
+      { min: 85, grade: 'A',  color: 'text-emerald-400', bg: '#34D399' },
+      { min: 80, grade: 'A-', color: 'text-emerald-400', bg: '#6EE7B7' },
+      { min: 75, grade: 'B+', color: 'text-cyan-400',    bg: '#22D3EE' },
+      { min: 70, grade: 'B',  color: 'text-cyan-400',    bg: '#67E8F9' },
+      { min: 65, grade: 'B-', color: 'text-cyan-400',    bg: '#A5F3FC' },
+      { min: 55, grade: 'C',  color: 'text-blue-400',    bg: '#60A5FA' },
+      { min: 45, grade: 'D',  color: 'text-orange-400',  bg: '#FB923C' },
+      { min: 0,  grade: 'F',  color: 'text-red-500',     bg: '#EF4444' },
     ];
 
-    const quantHabits = [
-      { id: 9, text: "Sleepmaxxing", unit: "hours", max: 8, points: 3 },
-      { id: 10, text: "10k Stepmaxx", unit: "steps", max: 10000, points: 2 },
-      { id: 11, text: "Proteinmaxxing", unit: "g", max: 200, points: 3 },
-      { id: 12, text: "Creatinemaxxing", unit: "g", max: 5, points: 2 },
-      { id: 13, text: "No slop", unit: "clean meals", max: 3, points: 2 }
-    ];
+    // ─── STATE ───────────────────────────────────────────────────────────────
+    let data         = {};
+    let currentUser  = null;
+    let syncTimeout  = null;
+    let isOnline     = navigator.onLine;
+    const today      = new Date().toISOString().split('T')[0];
+    let viewDate     = new Date();
+    let authMode     = 'signin'; // 'signin' | 'signup'
+    const LOCAL_KEY  = 'chudxData';
 
-    let data = JSON.parse(localStorage.getItem('chudxData')) || {};
-    const today = new Date().toISOString().split('T')[0];
-    const MAX_POINTS = 35;
+    // ─── AUTH HELPERS ────────────────────────────────────────────────────────
 
-    function getLetterGrade(points) {
-      const percent = (points / MAX_POINTS) * 100;
-      if (percent >= 95) return { grade: 'S', color: 'text-yellow-400', bg: '#FACC15' };
-      if (percent >= 90) return { grade: 'A+', color: 'text-emerald-400', bg: '#10B981' };
-      if (percent >= 85) return { grade: 'A', color: 'text-emerald-400', bg: '#34D399' };
-      if (percent >= 80) return { grade: 'A-', color: 'text-emerald-400', bg: '#6EE7B7' };
-      if (percent >= 75) return { grade: 'B+', color: 'text-cyan-400', bg: '#22D3EE' };
-      if (percent >= 70) return { grade: 'B', color: 'text-cyan-400', bg: '#67E8F9' };
-      if (percent >= 65) return { grade: 'B-', color: 'text-cyan-400', bg: '#A5F3FC' };
-      if (percent >= 55) return { grade: 'C', color: 'text-blue-400', bg: '#60A5FA' };
-      if (percent >= 45) return { grade: 'D', color: 'text-orange-400', bg: '#FB923C' };
-      return { grade: 'F', color: 'text-red-500', bg: '#EF4444' };
+    function toggleAuthMode() {
+      authMode = authMode === 'signin' ? 'signup' : 'signin';
+      document.getElementById('auth-submit').textContent =
+        authMode === 'signin' ? 'Sign In' : 'Create Account';
+      document.getElementById('auth-toggle-label').innerHTML =
+        authMode === 'signin'
+          ? `No account? <span class="auth-link" onclick="toggleAuthMode()">Create one</span>`
+          : `Have an account? <span class="auth-link" onclick="toggleAuthMode()">Sign in</span>`;
+      showAuthError('');
     }
 
+    function showAuthError(msg) {
+      const el = document.getElementById('auth-error');
+      el.textContent = msg;
+      el.classList.toggle('hidden', !msg);
+    }
+
+    async function handleAuth() {
+      const email    = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      const btn      = document.getElementById('auth-submit');
+      if (!email || !password) return showAuthError('Please enter email and password.');
+      btn.disabled = true;
+      btn.textContent = authMode === 'signin' ? 'Signing in…' : 'Creating account…';
+
+      const fn = authMode === 'signin'
+        ? () => sb.auth.signInWithPassword({ email, password })
+        : () => sb.auth.signUp({ email, password });
+
+      const { error } = await fn();
+      btn.disabled = false;
+      btn.textContent = authMode === 'signin' ? 'Sign In' : 'Create Account';
+      if (error) return showAuthError(error.message);
+    }
+
+    async function sendMagicLink() {
+      const email = document.getElementById('auth-email').value.trim();
+      if (!email) return showAuthError('Enter your email first.');
+      showAuthError('');
+      const { error } = await sb.auth.signInWithOtp({ email });
+      if (error) return showAuthError(error.message);
+      document.getElementById('magic-sent').classList.remove('hidden');
+    }
+
+    async function signOut() {
+      await sb.auth.signOut();
+      currentUser = null;
+      data = {};
+      showScreen('auth');
+    }
+
+    // ─── SYNC ────────────────────────────────────────────────────────────────
+
+    function setSyncStatus(status) {
+      // status: 'syncing' | 'synced' | 'offline'
+      const dot   = document.getElementById('sync-dot');
+      const label = document.getElementById('sync-label');
+      dot.className   = 'sync-dot ' + status;
+      label.textContent = status === 'syncing' ? 'Syncing…'
+                        : status === 'offline'  ? 'Offline'
+                        : 'Synced';
+    }
+
+    /** Pull all rows for this user and merge into local data */
+    async function pullFromSupabase() {
+      if (!currentUser || !isOnline) return;
+      const { data: rows, error } = await sb
+        .from('habits')
+        .select('date, payload')
+        .eq('user_id', currentUser.id);
+      if (error) { console.error('Pull error:', error); return; }
+
+      // Remote wins for any date that exists remotely
+      rows.forEach(row => { data[row.date] = row.payload; });
+      // Persist merged result locally
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+    }
+
+    /** Push a single day's data to Supabase (upsert) */
+    async function pushDay(date) {
+      if (!currentUser || !isOnline) return;
+      setSyncStatus('syncing');
+      const { error } = await sb.from('habits').upsert({
+        user_id:    currentUser.id,
+        date,
+        payload:    data[date],
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,date' });
+      setSyncStatus(error ? 'offline' : 'synced');
+      if (error) console.error('Push error:', error);
+    }
+
+    /** Debounced save: write to localStorage immediately, push to Supabase after 800ms idle */
+    function saveData(date = today) {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+      clearTimeout(syncTimeout);
+      setSyncStatus('syncing');
+      syncTimeout = setTimeout(() => pushDay(date), 800);
+    }
+
+    // ─── HELPERS ─────────────────────────────────────────────────────────────
+
+    function blankDay()    { return { binary: {}, quant: {}, gym: false, gymVolume: 0 }; }
+    function ensureToday() { if (!data[today]) data[today] = blankDay(); }
+    function getLetterGrade(points) {
+      return GRADES.find(g => (points / MAX_POINTS) * 100 >= g.min);
+    }
+    function calcStreak() {
+      let streak = 0;
+      const cursor = new Date(today);
+      while (true) {
+        const d = cursor.toISOString().split('T')[0];
+        if (data[d] && calculateScore(data[d]) >= STREAK_THRESHOLD) {
+          streak++; cursor.setDate(cursor.getDate() - 1);
+        } else break;
+      }
+      return streak;
+    }
     function calculateScore(dayData) {
       if (!dayData) return 0;
       let score = 0;
-
-      binaryHabits.forEach(h => { if (dayData.binary && dayData.binary[h.id]) score += h.points; });
-
-      quantHabits.forEach(h => {
-        if (dayData.quant && dayData.quant[h.id] !== undefined) {
-          const value = parseFloat(dayData.quant[h.id]) || 0;
-          score += Math.round(h.points * Math.min(value / h.max, 1));
-        }
+      BINARY_HABITS.forEach(h => { if (dayData.binary?.[h.id]) score += h.points; });
+      QUANT_HABITS.forEach(h => {
+        const val = parseFloat(dayData.quant?.[h.id]) || 0;
+        score += Math.round(h.points * Math.min(val / h.max, 1));
       });
-
-      if (dayData.gym) {
-        const volume = dayData.gymVolume || 0;
-        const TARGET_KG = 10000;
-        score += Math.round(Math.min(3, 3 * (volume / TARGET_KG)));
-      }
-
+      if (dayData.gym)
+        score += Math.round(Math.min(3, 3 * ((dayData.gymVolume || 0) / 10000)));
       return score;
     }
+
+    // ─── DAILY PAGE ──────────────────────────────────────────────────────────
 
     function renderBinary() {
       const container = document.getElementById('binary-list');
       container.innerHTML = '';
-      binaryHabits.forEach(h => {
-        const checked = data[today] && data[today].binary && data[today].binary[h.id];
+      BINARY_HABITS.forEach(h => {
+        const checked = data[today]?.binary?.[h.id] || false;
         const div = document.createElement('div');
         div.className = 'habit-item flex items-center gap-3 bg-zinc-900 px-5 py-4 rounded-2xl';
-        div.innerHTML = `<input type="checkbox" id="b${h.id}" ${checked ? 'checked' : ''} class="w-5 h-5 accent-emerald-400"><label for="b${h.id}" class="flex-1 text-[15px] cursor-pointer">${h.text}</label>`;
-        container.appendChild(div);
+        div.innerHTML = `
+          <input type="checkbox" id="b${h.id}" ${checked ? 'checked' : ''} class="w-5 h-5 accent-emerald-400">
+          <label for="b${h.id}" class="flex-1 text-[15px] cursor-pointer">${h.text}</label>`;
         div.querySelector('input').addEventListener('change', e => {
-          if (!data[today]) data[today] = { binary: {}, quant: {}, gym: false, gymVolume: 0 };
+          ensureToday();
           data[today].binary[h.id] = e.target.checked;
           saveData();
           updateScore();
         });
+        container.appendChild(div);
       });
     }
 
     function renderQuant() {
       const container = document.getElementById('quant-list');
       container.innerHTML = '';
-      quantHabits.forEach(h => {
-        const value = data[today] && data[today].quant && data[today].quant[h.id] !== undefined ? data[today].quant[h.id] : 0;
+      QUANT_HABITS.forEach(h => {
+        const value = data[today]?.quant?.[h.id] ?? 0;
         const div = document.createElement('div');
         div.className = 'habit-item flex items-center gap-3 bg-zinc-900 px-5 py-4 rounded-2xl';
-        div.innerHTML = `<label class="flex-1 text-[15px]">${h.text}</label><input type="number" id="q${h.id}" value="${value}" min="0" max="${h.max}" class="w-20 bg-zinc-800 text-white text-right px-3 py-1 rounded-xl font-mono"><span class="text-xs text-zinc-400">${h.unit}</span>`;
-        container.appendChild(div);
+        div.innerHTML = `
+          <label class="flex-1 text-[15px]">${h.text}</label>
+          <input type="number" id="q${h.id}" value="${value}" min="0" max="${h.max}"
+            class="w-20 bg-zinc-800 text-white text-right px-3 py-1 rounded-xl font-mono">
+          <span class="text-xs text-zinc-400">${h.unit}</span>`;
         div.querySelector('input').addEventListener('input', e => {
-          if (!data[today]) data[today] = { binary: {}, quant: {}, gym: false, gymVolume: 0 };
+          ensureToday();
           data[today].quant[h.id] = parseFloat(e.target.value) || 0;
           saveData();
           updateScore();
         });
+        container.appendChild(div);
       });
     }
 
     function updateScore() {
-      const dayData = data[today] || {};
-      const score = calculateScore(dayData);
-      const gradeInfo = getLetterGrade(score);
-
-      document.getElementById('grade').textContent = gradeInfo.grade;
-      document.getElementById('grade').className = `text-7xl font-black mb-1 ${gradeInfo.color}`;
-      document.getElementById('score-detail').textContent = `${score}/${MAX_POINTS} • ${Math.round((score/MAX_POINTS)*100)}%`;
-      document.getElementById('progress').style.width = `${(score/MAX_POINTS)*100}%`;
-      updateStreak();
+      const score = calculateScore(data[today] || {});
+      const g     = getLetterGrade(score);
+      const pct   = Math.round((score / MAX_POINTS) * 100);
+      document.getElementById('grade').textContent          = g.grade;
+      document.getElementById('grade').className            = `text-7xl font-black mb-1 ${g.color}`;
+      document.getElementById('score-detail').textContent   = `${score}/${MAX_POINTS} • ${pct}%`;
+      document.getElementById('progress').style.width       = `${pct}%`;
+      document.getElementById('streak-count').textContent   = calcStreak();
     }
 
-    function updateStreak() {
-      let streak = 0;
-      let date = new Date(today);
-      while (true) {
-        const dateStr = date.toISOString().split('T')[0];
-        const dayData = data[dateStr];
-        if (dayData && calculateScore(dayData) >= 24) {
-          streak++;
-          date.setDate(date.getDate() - 1);
-        } else break;
-      }
-      document.getElementById('streak-count').textContent = streak;
+    // ─── CALENDAR PAGE ───────────────────────────────────────────────────────
+
+    function shiftMonth(delta) {
+      viewDate.setMonth(viewDate.getMonth() + delta);
+      renderCalendar();
     }
 
     function renderCalendar() {
-      const grid = document.getElementById('calendar-grid');
-      grid.innerHTML = '';
-      const currentDate = new Date();
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-      document.getElementById('calendar-month').textContent = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-      const firstDay = new Date(year, month, 1).getDay();
+      const year        = viewDate.getFullYear();
+      const month       = viewDate.getMonth();
+      const firstDay    = new Date(year, month, 1).getDay();
       const daysInMonth = new Date(year, month + 1, 0).getDate();
-      for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
+      document.getElementById('calendar-month').textContent =
+        viewDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+      let html = '<div></div>'.repeat(firstDay);
       for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-        const dayData = data[dateStr];
-        const score = dayData ? calculateScore(dayData) : 0;
-        const gradeInfo = score > 0 ? getLetterGrade(score) : null;
-        const dayEl = document.createElement('div');
-        dayEl.className = `calendar-day text-zinc-300 ${score > 0 ? 'has-data' : ''}`;
-        if (score > 0) dayEl.style.backgroundColor = gradeInfo.bg;
-        dayEl.textContent = day;
-        grid.appendChild(dayEl);
+        const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const score   = data[dateStr] ? calculateScore(data[dateStr]) : 0;
+        const grade   = score > 0 ? getLetterGrade(score) : null;
+        html += `<div class="${grade ? 'calendar-day has-data' : 'calendar-day text-zinc-300'}"
+                      style="${grade ? `background-color:${grade.bg}` : ''}">${day}</div>`;
       }
+      document.getElementById('calendar-grid').innerHTML = html;
     }
+
+    // ─── STATS PAGE ──────────────────────────────────────────────────────────
 
     function renderStats() {
-      const streakEl = document.getElementById('stats-streak');
-      streakEl.textContent = document.getElementById('streak-count').textContent + ' days 🔥';
+      document.getElementById('stats-streak').textContent = calcStreak() + ' days 🔥';
 
-      const recent = Object.keys(data).sort().reverse().slice(0,7);
-      const container = document.getElementById('stats-recent');
-      container.innerHTML = recent.map(date => {
+      const last14 = Object.keys(data).sort().reverse().slice(0, 14);
+      const avg = last14.length
+        ? Math.round(last14.reduce((s, d) =>
+            s + (calculateScore(data[d]) / MAX_POINTS) * 100, 0) / last14.length)
+        : 0;
+      document.getElementById('stats-average').textContent = avg + '%';
+
+      const recent = Object.keys(data).sort().reverse().slice(0, 7);
+      document.getElementById('stats-recent').innerHTML = recent.map(date => {
         const score = calculateScore(data[date]);
-        const grade = getLetterGrade(score);
-        return `<div class="flex justify-between bg-zinc-800 px-4 py-3 rounded-2xl"><span>${date}</span><span class="${grade.color} font-bold">${grade.grade} (${score})</span></div>`;
+        const g     = getLetterGrade(score);
+        return `<div class="flex justify-between bg-zinc-800 px-4 py-3 rounded-2xl">
+          <span>${date}</span>
+          <span class="${g.color} font-bold">${g.grade} (${score})</span>
+        </div>`;
       }).join('');
 
-      const progressContainer = document.getElementById('gym-progress');
-      progressContainer.innerHTML = '';
-      const weeks = [7,14,21,28];
-      weeks.forEach(days => {
-        const weekData = Object.keys(data).filter(d => {
-          const diff = Math.floor((new Date(today) - new Date(d)) / (1000*60*60*24));
-          return diff >= days-7 && diff < days;
+      document.getElementById('gym-progress').innerHTML = [7,14,21,28].map((days, i) => {
+        const weekDates = Object.keys(data).filter(d => {
+          const diff = Math.floor((new Date(today) - new Date(d)) / 86400000);
+          return diff >= days - 7 && diff < days;
         });
         let total = 0, count = 0;
-        weekData.forEach(d => { if (data[d].gymVolume) { total += data[d].gymVolume; count++; } });
-        const avg = count ? Math.round(total / count) : 0;
-        const barHTML = `<div class="flex-1 text-center"><div class="text-[10px] text-zinc-400">Wk ${Math.round(days/7)}</div><div class="h-24 bg-zinc-800 rounded-2xl flex items-end p-1"><div class="w-full bg-emerald-400 rounded-xl" style="height: ${Math.min(avg/10,100)}%"></div></div><div class="text-xs font-mono mt-1">${avg}kg</div></div>`;
-        progressContainer.innerHTML += barHTML;
-      });
+        weekDates.forEach(d => { if (data[d]?.gymVolume) { total += data[d].gymVolume; count++; } });
+        const avg  = count ? Math.round(total / count) : 0;
+        const pct  = Math.min((avg / TARGET_WEEKLY_AVG) * 100, 100).toFixed(1);
+        return `<div class="flex-1 text-center">
+          <div class="text-[10px] text-zinc-400">Wk ${i+1}</div>
+          <div class="h-24 bg-zinc-800 rounded-2xl flex items-end p-1">
+            <div class="w-full bg-emerald-400 rounded-xl transition-all" style="height:${pct}%"></div>
+          </div>
+          <div class="text-xs font-mono mt-1">${avg}kg</div>
+        </div>`;
+      }).join('');
     }
 
-    function switchPage(pageIndex) {
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.getElementById(['page-daily','page-calendar','page-stats'][pageIndex]).classList.add('active');
-      document.querySelectorAll('.nav-item').forEach((btn, i) => btn.classList.toggle('active-nav', i === pageIndex));
-      if (pageIndex === 1) renderCalendar();
-      if (pageIndex === 2) renderStats();
+    // ─── NAV ─────────────────────────────────────────────────────────────────
+
+    function switchPage(index) {
+      document.querySelectorAll('.page').forEach((p, i) =>
+        p.classList.toggle('active', i === index));
+      document.querySelectorAll('.nav-item').forEach((btn, i) =>
+        btn.classList.toggle('active-nav', i === index));
+      if (index === 1) renderCalendar();
+      if (index === 2) renderStats();
     }
 
-    function saveData() {
-      localStorage.setItem('chudxData', JSON.stringify(data));
+    // ─── SCREEN MANAGEMENT ───────────────────────────────────────────────────
+
+    function showScreen(name) {
+      document.getElementById('loading-screen').classList.add('hidden');
+      document.getElementById('auth-screen').classList.toggle('hidden', name !== 'auth');
+      document.getElementById('app').classList.toggle('hidden', name !== 'app');
     }
 
-    function init() {
-      document.getElementById('date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-      if (!data[today]) data[today] = { binary: {}, quant: {}, gym: false, gymVolume: 0 };
+    // ─── APP INIT ────────────────────────────────────────────────────────────
+
+    async function initApp(user) {
+      currentUser = user;
+
+      // Start with whatever is cached locally
+      data = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}');
+
+      // Pull remote data and merge (remote wins on conflict)
+      setSyncStatus('syncing');
+      await pullFromSupabase();
+      setSyncStatus('synced');
+
+      ensureToday();
+      showScreen('app');
+
+      document.getElementById('date').textContent =
+        new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
       renderBinary();
       renderQuant();
       updateScore();
 
-      const toggle = document.getElementById('gym-toggle');
-      const volumeBox = document.getElementById('volume-input');
+      // Gym toggle
+      const toggle      = document.getElementById('gym-toggle');
+      const volumeBox   = document.getElementById('volume-input');
       const volumeInput = document.getElementById('gym-volume');
 
       toggle.checked = !!data[today].gym;
@@ -338,56 +590,41 @@
       toggle.addEventListener('change', () => {
         data[today].gym = toggle.checked;
         volumeBox.classList.toggle('hidden', !toggle.checked);
-        saveData();
-        updateScore();
+        saveData(); updateScore();
       });
-
       volumeInput.addEventListener('input', () => {
         data[today].gymVolume = parseFloat(volumeInput.value) || 0;
-        saveData();
-        updateScore();
-      });
-
-      switchPage(0);
-    }
-
-    function renderBinary() {
-      const container = document.getElementById('binary-list');
-      container.innerHTML = '';
-      binaryHabits.forEach(h => {
-        const checked = data[today] && data[today].binary && data[today].binary[h.id];
-        const div = document.createElement('div');
-        div.className = 'habit-item flex items-center gap-3 bg-zinc-900 px-5 py-4 rounded-2xl';
-        div.innerHTML = `<input type="checkbox" id="b${h.id}" ${checked ? 'checked' : ''} class="w-5 h-5 accent-emerald-400"><label for="b${h.id}" class="flex-1 text-[15px] cursor-pointer">${h.text}</label>`;
-        container.appendChild(div);
-        div.querySelector('input').addEventListener('change', e => {
-          if (!data[today]) data[today] = { binary: {}, quant: {}, gym: false, gymVolume: 0 };
-          data[today].binary[h.id] = e.target.checked;
-          saveData();
-          updateScore();
-        });
+        saveData(); updateScore();
       });
     }
 
-    function renderQuant() {
-      const container = document.getElementById('quant-list');
-      container.innerHTML = '';
-      quantHabits.forEach(h => {
-        const value = data[today] && data[today].quant && data[today].quant[h.id] !== undefined ? data[today].quant[h.id] : 0;
-        const div = document.createElement('div');
-        div.className = 'habit-item flex items-center gap-3 bg-zinc-900 px-5 py-4 rounded-2xl';
-        div.innerHTML = `<label class="flex-1 text-[15px]">${h.text}</label><input type="number" id="q${h.id}" value="${value}" min="0" max="${h.max}" class="w-20 bg-zinc-800 text-white text-right px-3 py-1 rounded-xl font-mono"><span class="text-xs text-zinc-400">${h.unit}</span>`;
-        container.appendChild(div);
-        div.querySelector('input').addEventListener('input', e => {
-          if (!data[today]) data[today] = { binary: {}, quant: {}, gym: false, gymVolume: 0 };
-          data[today].quant[h.id] = parseFloat(e.target.value) || 0;
-          saveData();
-          updateScore();
-        });
-      });
-    }
+    // ─── ONLINE / OFFLINE DETECTION ──────────────────────────────────────────
 
-    init();
+    window.addEventListener('online', async () => {
+      isOnline = true;
+      if (currentUser) {
+        setSyncStatus('syncing');
+        await pullFromSupabase();
+        // Push any days modified while offline
+        for (const date of Object.keys(data)) await pushDay(date);
+        setSyncStatus('synced');
+      }
+    });
+    window.addEventListener('offline', () => {
+      isOnline = false;
+      setSyncStatus('offline');
+    });
+
+    // ─── SUPABASE AUTH LISTENER (entry point) ────────────────────────────────
+
+    sb.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await initApp(session.user);
+      } else {
+        currentUser = null;
+        showScreen('auth');
+      }
+    });
   </script>
 </body>
 </html>
