@@ -616,7 +616,11 @@
     });
 
     // ─── SUPABASE AUTH LISTENER (entry point) ────────────────────────────────
-
+    setTimeout(() => {
+  if (!document.getElementById('loading-screen').classList.contains('hidden')) {
+    showScreen('auth');
+  }
+}, 5000);
     sb.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         await initApp(session.user);
