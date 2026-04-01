@@ -231,8 +231,8 @@
   <script>
     // ─── SUPABASE SETUP ──────────────────────────────────────────────────────
     // ⚠️  Replace these two values with your own from supabase.com → Settings → API
-    const SUPABASE_URL      = 'https://gamzurlvzctuxyxwhyqj.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_blWPq0j57HNhJjx1HNvimQ_7_CvC5_e';
+    const SUPABASE_URL      = 'https://YOUR_PROJECT_ID.supabase.co';
+    const SUPABASE_ANON_KEY = 'YOUR_ANON_PUBLIC_KEY';
 
     const { createClient } = supabase;
     const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -349,16 +349,17 @@
     /** Pull all rows for this user and merge into local data */
     async function pullFromSupabase() {
       if (!currentUser || !isOnline) return;
-      const { data: rows, error } = await sb
-        .from('habits')
-        .select('date, payload')
-        .eq('user_id', currentUser.id);
-      if (error) { console.error('Pull error:', error); return; }
-
-      // Remote wins for any date that exists remotely
-      rows.forEach(row => { data[row.date] = row.payload; });
-      // Persist merged result locally
-      localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+      try {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 6000));
+        const fetchPromise = sb.from('habits').select('date, payload').eq('user_id', currentUser.id);
+        const { data: rows, error } = await Promise.race([fetchPromise, timeoutPromise]);
+        if (error || !rows) return;
+        rows.forEach(row => { data[row.date] = row.payload; });
+        localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+      } catch (e) {
+        console.warn('Supabase pull failed, using local cache:', e.message);
+      }
     }
 
     /** Push a single day's data to Supabase (upsert) */
@@ -558,44 +559,49 @@
     // ─── APP INIT ────────────────────────────────────────────────────────────
 
     async function initApp(user) {
-      currentUser = user;
+      try {
+        currentUser = user;
 
-      // Start with whatever is cached locally
-      data = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}');
+        // Start with whatever is cached locally
+        data = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}');
 
-      // Pull remote data and merge (remote wins on conflict)
-      setSyncStatus('syncing');
-      await pullFromSupabase();
-      setSyncStatus('synced');
+        // Pull remote data and merge (remote wins on conflict)
+        setSyncStatus('syncing');
+        await pullFromSupabase();
+        setSyncStatus('synced');
 
-      ensureToday();
-      showScreen('app');
+        ensureToday();
+        showScreen('app');
 
-      document.getElementById('date').textContent =
-        new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        document.getElementById('date').textContent =
+          new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-      renderBinary();
-      renderQuant();
-      updateScore();
+        renderBinary();
+        renderQuant();
+        updateScore();
 
-      // Gym toggle
-      const toggle      = document.getElementById('gym-toggle');
-      const volumeBox   = document.getElementById('volume-input');
-      const volumeInput = document.getElementById('gym-volume');
+        // Gym toggle
+        const toggle      = document.getElementById('gym-toggle');
+        const volumeBox   = document.getElementById('volume-input');
+        const volumeInput = document.getElementById('gym-volume');
 
-      toggle.checked = !!data[today].gym;
-      volumeBox.classList.toggle('hidden', !toggle.checked);
-      volumeInput.value = data[today].gymVolume || 0;
-
-      toggle.addEventListener('change', () => {
-        data[today].gym = toggle.checked;
+        toggle.checked = !!data[today].gym;
         volumeBox.classList.toggle('hidden', !toggle.checked);
-        saveData(); updateScore();
-      });
-      volumeInput.addEventListener('input', () => {
-        data[today].gymVolume = parseFloat(volumeInput.value) || 0;
-        saveData(); updateScore();
-      });
+        volumeInput.value = data[today].gymVolume || 0;
+
+        toggle.addEventListener('change', () => {
+          data[today].gym = toggle.checked;
+          volumeBox.classList.toggle('hidden', !toggle.checked);
+          saveData(); updateScore();
+        });
+        volumeInput.addEventListener('input', () => {
+          data[today].gymVolume = parseFloat(volumeInput.value) || 0;
+          saveData(); updateScore();
+        });
+      } catch (e) {
+        console.error('initApp error:', e);
+        showScreen('auth');
+      }
     }
 
     // ─── ONLINE / OFFLINE DETECTION ──────────────────────────────────────────
@@ -616,11 +622,14 @@
     });
 
     // ─── SUPABASE AUTH LISTENER (entry point) ────────────────────────────────
+
+    // Safety net: if loading screen is still visible after 5s, drop to auth
     setTimeout(() => {
-  if (!document.getElementById('loading-screen').classList.contains('hidden')) {
-    showScreen('auth');
-  }
-}, 5000);
+      if (!document.getElementById('loading-screen').classList.contains('hidden')) {
+        showScreen('auth');
+      }
+    }, 5000);
+
     sb.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         await initApp(session.user);
